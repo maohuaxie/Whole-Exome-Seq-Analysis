@@ -1,3 +1,9 @@
+#!/usr/bin/bash
+#Prepare the tools for emory cbioportal automate process pipeline.
+# Exit this script on any error.
+set -euo pipefail
+cd ~/project/bcl2
+
 time bwa mem -aM -t 12 -R "@RG\tID:sample17\tSM:Seq01\tPL:ILLUMINA\tPI:330" ~/ref/m10/m10noMT.fa index17_GTAGAG_L001-L002_R1_001.fastq index17_GTAGAG_L001-L002_R2_001.fastq > sample17.sam
 time samtools view -Sb sample17.sam > sample17.bam 
 time samtools sort sample17.bam > sample17.sorted.bam 
