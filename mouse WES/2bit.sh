@@ -33,3 +33,7 @@ twoBitToFa hg19.2bit hg19.fa
 
 # 最后再送上染色体的大小文件地址，也来自于UCSC.
 # http://genome.ucsc.edu/goldenPath/help/hg19.chrom.sizes
+
+please note: 
+$ chmod +x twoBitToFa
+$ ./twoBitToFa
