@@ -129,7 +129,7 @@ qsub -cwd -pe smp 24 removeadaptor.sh
 
 please note: For each step, if the directory is not specified, bassically, it is in current directory. You may can find out the directory with the output from the past step
 For example:
-In previous step, we are in /home/mxie/Projects/miRNA/analysis/pastsample/
+In previous step, we are in /home/mxie/Projects/miRNA/analysis/pastsample/trimmed
 
 ```
 nano lengthdistribution.sh
@@ -174,7 +174,7 @@ We map the reads with:
 
 $SHRIMP_FOLDER/bin/gmapper-ls --strata -o 1 --qv-offset 33 -Q -L /home/mxie/Projects/miRNA/analysis/miRbase/mature.human-ls $id \
 -N 14 --mode mirna -w 170% -E --un ${id}_unmapped-miRNA.fastq \
- >${id%%.*}_mapping.sam 2>${id%%.*}_maping.log;
+>${id%%.*}_mapping.sam 2>${id%%.*}_maping.log;
 
 The options used above have the following meaning:
 -L /home/mxie/Projects/miRNA/analysis/miRbase/mature.human-ls : Load genome projection.
@@ -186,7 +186,7 @@ loading the 5 seeds mentioned above; plus
 [ -E/--sam ]
 Select SAM output format. (This is on by default as of v2.3.0.)
 
-If you want to look into it more detail, please check with:https://github.com/compbio-UofT/shrimp
+If you want to look into it more detail, please check with: https://github.com/compbio-UofT/shrimp
 
 ```
 nano mapping.sh
@@ -264,3 +264,6 @@ for (i in 1:(length(file_list)-1)){
 title("Mapped Length Distribution", "86 samples of line plot")
 
 ```
+
+
+
