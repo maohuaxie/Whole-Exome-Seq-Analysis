@@ -1,8 +1,4 @@
 
-/home/twingo/Projects/AG056533/Amp-AD/RosMap/WGS
-/home/twingo/Projects/AG056533/Amp-AD/Mayo/WGS
-/home/twingo/Projects/AG056533/Amp-AD/MSBB/WGS
-
 ls directory | wc -l
 
 module avail
@@ -1588,11 +1584,13 @@ set -euo pipefail
 cd /sw/hgcc/Pkgs/SHRiMP/2.2.3
 export SHRIMP_FOLDER=$PWD
 cd /home/mxie/Projects/miRNA/analysis/Past86samples/trimmed
-for tfq in *_L001_R1_001_miRNAtrimmed.fastq.gz; do sid=${tfq%%_S*}; spx=${tfq%%_L00*}; 
-if [ ! -e ./trimmed/${sid}_mapping.sam ]; 
-then cat ${spx}_L00?_R1_001_miRNAtrimmed.fastq.gz | $SHRIMP_FOLDER/bin/gmapper-ls --strata -o 1 --qv-offset 33 -Q -L /home/mxie/Projects/miRNA/analysis/miRbase/mature.human-ls \
--N 14 --mode mirna -w 170% -E --un ./trimmed/${sid}_unmapped-miRNA.fastq \
-./trimmed/${sid}_mapping.sam 2>./trimmed/${sid}_mapping.log; fi; done
+for id in $(cat /home/mxie/Projects/miRNA/analysis/pastsample/cleanlist.txt);
+do 
+echo $id
+cat ${id}_L00?_R1_001_miRNAtrimmed.fastq.gz | $SHRIMP_FOLDER/bin/gmapper-ls --strata -o 1 --qv-offset 33 -Q -L /home/mxie/Projects/miRNA/analysis/miRbase/mature.human-ls \
+- -N 14 --mode mirna -w 170% -E --un ${id}_unmapped-miRNA.fastq \
+ >${id}_mapping.sam 2>${id}_mapping.log;
+done
 
 qsub -cwd -pe smp 24 mapping.sh
 
@@ -1607,11 +1605,7 @@ set -euo pipefail
 cd /sw/hgcc/Pkgs/SHRiMP/2.2.3
 export SHRIMP_FOLDER=$PWD
 cd /home/mxie/Projects/miRNA/analysis/Past86samples/trimmed
-for tfq in *_L00?_R1_001_miRNAtrimmed.fastq.gz; do sid=${tfq%%_S*}; spx=${tfq%%_L00*}; 
-if [ ! -e ./trimmed/${sid}_miRNAtrimmed_to_MB_mt_sorted.bam ]; 
-then cat ${spx}_L00?_R1_001_miRNAtrimmed.fastq.gz | $SHRIMP_FOLDER/bin/gmapper-ls --strata -o 1 --qv-offset 33 -Q -L /home/mxie/Projects/miRNA/analysis/miRbase/mature.human-ls \
--N 14 --mode mirna -w 170% -E --un ./trimmed/${sid}_unmapped-miRNA.fastq | /sw/hgcc/Pkgs/samtools/1.5/bin/samtools view -Su - | /sw/hgcc/Pkgs/samtools/1.5/bin/samtools sort -m 12000000000 - ./trimmed/${sid}_miRNAtrimmed_to_MB_mt_sorted; 
-/sw/hgcc/Pkgs/samtools/1.5/bin/samtools index ./trimmed/${sid}_miRNAtrimmed_to_MB_mt_sorted.bam; fi; done
+
 
 qsub -cwd -pe smp 24 mapping.sh
 
@@ -1666,7 +1660,7 @@ done
 qsub -cwd -pe smp 24 counting.sh
 
 
-nano samtobamsort.sh
+nano samtobam.sh
 
 #!/bin/sh
 set -euo pipefail
@@ -1692,6 +1686,99 @@ ls *miRNAtrimmed_mapping.sam_miRNAtrimmed_to_MB_mt_sorted.bam | while read FILE 
 done 
 
 
+nano mapping.sh
+
+#!/bin/sh
+set -euo pipefail
+cd /sw/hgcc/Pkgs/SHRiMP/2.2.3
+export SHRIMP_FOLDER=$PWD
+cd /home/mxie/Projects/miRNA/analysis/Past86samples/trimmed
+for id in $(cat /home/mxie/Projects/miRNA/analysis/pastsample/cleanlist.txt);
+do 
+echo $id
+cat ${id}_L00?_R1_001_miRNAtrimmed.fastq.gz | $SHRIMP_FOLDER/bin/gmapper-ls --strata -o 1 --qv-offset 33 -Q -L /home/mxie/Projects/miRNA/analysis/miRbase/mature.human-ls \
+- -N 14 --mode mirna -w 170% -E --un ${id}_unmapped-miRNA.fastq \
+ >${id}_mapping.sam 2>${id}_mapping.log;
+done
+
+qsub -cwd -pe smp 24 mapping.sh
+
+
+nano samtobamsort.sh
+
+#!/bin/sh
+set -euo pipefail
+ls  *.sam | while read id
+do
+echo $id
+/sw/hgcc/Pkgs/samtools/1.5/bin/samtools view -Su $id > ./trimmed/${id}.bam;
+/sw/hgcc/Pkgs/samtools/1.5/bin/samtools sort ./trimmed/${id}.bam > ./trimmed/${id%%.*}_miRNAtrimmed_to_MB_mt_sorted.bam
+/sw/hgcc/Pkgs/samtools/1.5/bin/samtools index ./trimmed/${id}_miRNAtrimmed_to_MB_mt_sorted.bam
+done
+
+qsub -cwd -pe smp 24 samtobamsort.sh
+
+
+
+
+nano counting.sh
+
+#!/bin/sh
+set -euo pipefail
+for tbf in *_miRNAtrimmed_to_MB_mt_sorted.bam; 
+do sid=${tbf%%_miRNAtrimmed_to_MB_mt_sorted.bam}; 
+if [ ! -e ${sid}_mt_subcount.txt ]; 
+then echo ${sid}_mt_subcount.txt; 
+for mirna in `/sw/hgcc/Pkgs/samtools/1.5/bin/samtools view -h ${tbf} | gawk '$1 == "@SQ"{printf("%s\n",substr($2,4))}' | sort`; do cnt=`/sw/hgcc/Pkgs/samtools/1.5/bin/samtools view -c ${tbf} ${mirna}`; echo "${mirna}	${cnt}"; 
+done > ${sid}_mt_subcount.txt; fi; done
+
+qsub -cwd -pe smp 24 counting.sh
+
+
+ls *miRNAtrimmed_mapping.sam_miRNAtrimmed_to_MB_mt_sorted.bam.bai | while read FILE ; do
+    newfile="$(echo ${FILE} |sed -e 's/miRNAtrimmed_mapping.sam_miRNAtrimmed_to_MB_mt_sorted/miRNAtrimmed_to_MB_mt_sorted/')" ;
+    mv "${FILE}" "${newfile}" ;
+done 
+
+
+nano lengthdistribution.sh
+
+echo -n "length" > trimmed_length_distribution_header.txt;
+cp length_labels.txt trimmed_length_distribution_data.txt;
+for tfq in *_R1_001_miRNAtrimmed.fastq.gz; 
+do sbn=`basename ${tfq}`; sid=${sbn%%_R1*}; 
+echo -n "	${sid}" >> trimmed_length_distribution_header.txt; 
+mv trimmed_length_distribution_data.txt tmp_trimmed_length_distribution_data.txt; 
+zcat ${tfq} | gawk '(NR %4) == 2{lenarr[length($0)]++}END{for (len = 1;len <= 101; len++) printf("%d\t%d\n",len,lenarr[len])}' | sort -k 1n,1n | join -t "	" -a 1 tmp_trimmed_length_distribution_data.txt - > trimmed_length_distribution_data.txt;
+done; 
+echo "" >> trimmed_length_distribution_header.txt;
+cat trimmed_length_distribution_header.txt trimmed_length_distribution_data.txt > trimmed_length_distribution_table.txt
+
+qsub -cwd -pe smp 24 lengthdistribution.sh
+
+for scp in ../*/*_mt_subcount.txt; 
+do sid=`basename ${scp} _mt_subcount.txt`; 
+echo ${sid}; 
+done | sort -g > sampleIDList.txt
+gawk '{print $1}' 1_R-110_mt_subcount.txt > subcount_table.txt; echo -n "ID" > subcount_table_header.txt; 
+for sid in `cat sampleIDList.txt`; 
+do echo -n "	${sid}" >> subcount_table_header.txt; 
+mv subcount_table.txt tmp_subcount_table.txt; join -t "	" tmp_subcount_table.txt ../*/${sid}_mt_subcount.txt > subcount_table.txt; 
+done; echo "" >> subcount_table_header.txt; mv subcount_table.txt tmp_subcount_table.txt; 
+cat subcount_table_header.txt tmp_subcount_table.txt > subcount_table.txt
+
+
+
+echo -n "length" > mapped_length_distribution_header.txt; 
+cp length_labels.txt mapped_length_distribution_data.txt; 
+for sid in `cat sampleIDList.txt`; 
+do echo -n "	${sid}" >> mapped_length_distribution_header.txt; 
+mv mapped_length_distribution_data.txt tmp_mapped_length_distribution_data.txt; 
+samtools view ${sid}_miRNAtrimmed_to_MB_mt_sorted.bam | gawk '{mlarr[length($10)]++}END{for (len = 1; len <=101; len++) printf("%d\t%d\n",len,mlarr[len])}' | sort -k 1n,1n | join -t "	" -a 1 tmp_mapped_length_distribution_data.txt - > mapped_length_distribution_data.txt; done; echo "" >> mapped_length_distribution_header.txt; cat mapped_length_distribution_header.txt mapped_length_distribution_data.txt > mapped_length_distribution_table.txt
+
+
+
+
 
 
 
@@ -1715,19 +1802,6 @@ for fqf in *_R1_001.fastq.gz; do fid=${fqf%%_R1_001.fastq.gz}; if [ ! -e ${fid}_
 # echo -n "length" > mapped_length_distribution_header.txt; cp length_labels.txt mapped_length_distribution_data.txt; for sid in `cat sampleIDList.txt`; do echo -n "	${sid}" >> mapped_length_distribution_header.txt; mv mapped_length_distribution_data.txt tmp_mapped_length_distribution_data.txt; samtools view ../402_EU_Wingo_86miRNASeq_*/${sid}_miRNAtrimmed_to_MB_mt_sorted.bam | gawk '{mlarr[length($10)]++}END{for (len = 1; len <=101; len++) printf("%d\t%d\n",len,mlarr[len])}' | sort -k 1n,1n | join -t "	" -a 1 tmp_mapped_length_distribution_data.txt - > mapped_length_distribution_data.txt; done; echo "" >> mapped_length_distribution_header.txt; cat mapped_length_distribution_header.txt mapped_length_distribution_data.txt > mapped_length_distribution_table.txt
 #
 # 
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 /home/mxie/Projects/miRNA/analysis/Past86samples
@@ -1769,3 +1843,202 @@ for sid in `cat sampleIDList.txt`;
 do echo -n "	${sid}" >> mapped_length_distribution_header.txt; 
 mv mapped_length_distribution_data.txt tmp_mapped_length_distribution_data.txt; 
 samtools view ../402_EU_Wingo_86miRNASeq_*/${sid}_miRNAtrimmed_to_MB_mt_sorted.bam | gawk '{mlarr[length($10)]++}END{for (len = 1; len <=101; len++) printf("%d\t%d\n",len,mlarr[len])}' | sort -k 1n,1n | join -t "	" -a 1 tmp_mapped_length_distribution_data.txt - > mapped_length_distribution_data.txt; done; echo "" >> mapped_length_distribution_header.txt; cat mapped_length_distribution_header.txt mapped_length_distribution_data.txt > mapped_length_distribution_table.txt
+
+
+3/5/2018
+
+setwd("D:/Emoryjob/miRNA/trimmedlength/")
+
+file_list <- list.files()
+
+for (file in file_list){
+  lenData <- read.table(file,sep ='')
+  names(lenData) <- c("Countnumber", "Readlength")
+  lenData<- as.data.frame(lenData)
+  plot(lenData$Readlength,lenData$Countnumber, main="Read Length Distribution",type = 'b', col="blue",xlab="Readlength",
+       ylab="Countnumber" )
+  
+}
+
+
+
+3/6/2018
+
+
+nano removeadaptor.sh
+
+#!/bin/sh
+set -euo pipefail
+ls *fastq.gz |while read id
+do
+echo $id
+java -Xmx2g -jar /sw/hgcc/Pkgs/Trimmomatic/0.36/trimmomatic-0.36.jar SE -phred33 $id  ./trimmed/${id%%.*}_miRNAtrimmed.fastq.gz ILLUMINACLIP:/home/mxie/Projects/miRNA/analysis/illumina_RGA_3p_adapter.fa:2:30:10;
+done   
+
+qsub -cwd -pe smp 24 removeadaptor.sh
+
+
+nano lengthdistribution.sh
+#!/bin/sh
+set -euo pipefail
+ls *_miRNAtrimmed.fastq.gz |while read id
+do
+echo $id
+gunzip -c $id | awk '{if(NR%4==2) print length($1)}' | sort -n | uniq -c >${id%%.*}_length.txt;
+done
+qsub -cwd -pe smp 24 lengthdistribution.sh
+
+
+setwd("D:/Emoryjob/miRNA/trimmedlength/")
+
+file_list <- list.files()
+
+# Create Line Chart
+# get the range for the x and y axis 
+xrange <- range(1,105) 
+yrange <- range(1,1.8e+07) 
+# set up the plot 
+plot(xrange, yrange, type="n", xlab="Readlength",
+     ylab="Countnumber" ) 
+
+# add lines 
+for (i in 1:(length(file_list)-1)) { 
+  lenData <- read.table(file_list[i], sep ='')
+  names(lenData) <- c("Countnumber", "Readlength")
+  lenData<- as.data.frame(lenData)
+  lines(lenData$Readlength, lenData$Countnumber, type="b", col="blue") 
+} 
+
+# add a title and subtitle
+
+title("Read Length Distribution", "86 samples of line plot")
+
+
+
+Part V: Mapping miRNA to miRbase reference with mapping.sh
+
+nano mapping.sh
+
+#!/bin/sh
+set -euo pipefail
+cd /sw/hgcc/Pkgs/SHRiMP/2.2.3
+export SHRIMP_FOLDER=$PWD
+cd /home/mxie/Projects/miRNA/analysis/data/trimmed
+ls *miRNAtrimmed.fastq.gz |while read id
+do
+echo $id
+$SHRIMP_FOLDER/bin/gmapper-ls --strata -o 1 --qv-offset 33 -Q -L /home/mxie/Projects/miRNA/analysis/miRbase/mature.human-ls $id \
+-N 14 --mode mirna -w 170% -E --un ${id}_unmapped-miRNA.fastq \
+ >${id%%.*}_mapping.sam 2>${id%%.*}_maping.log;
+done
+
+qsub -cwd -pe smp 24 mapping.sh
+
+
+Part VI Counting the reads mapped for each miRNA. 
+
+nano counting.sh
+
+#!/bin/sh
+set -euo pipefail
+ls  *.sam| while read id
+do
+echo $id
+/sw/hgcc/Pkgs/samtools/1.5/bin/samtools view  -SF 4 $id |perl -alne '{$h{$F[2]}++}END{print "$_\t$h{$_}" foreach sort keys %h }'  > ${id%%.*}.mature.counts;
+done
+
+qsub -cwd -pe smp 24 counting.sh
+
+Part VII Do quality control and show the mapped length distribution with mappinglenthdistribution.sh
+
+nano mappinglenthdistribution.sh
+
+#!/bin/sh
+set -euo pipefail
+ls  *.sam| while read id
+do
+echo $id
+/sw/hgcc/Pkgs/samtools/1.5/bin/samtools view $id | gawk '{mlarr[length($10)]++}END{for (len = 1; len <=101; len++) printf("%d\t%d\n",len,mlarr[len])}' | sort -k 1n,1n  > ${id%%.*}_mapped_length_distribution_data.txt
+done
+
+qsub -cwd -pe smp 24 mappinglenthdistribution.sh
+
+
+setwd("D:/Emoryjob/miRNA/mappedlength/")
+
+file_list <- list.files()
+# Create Line Chart
+# get the range for the x and y axis 
+xrange <- range(1,105) 
+yrange <- range(1,1.8e+07) 
+# set up the plot 
+plot(xrange, yrange, type="n", xlab="Mapped length",
+     ylab="Countnumber" ) 
+
+for (i in 1:(length(file_list)-1)){
+  lenData <- read.table(file_list[i], sep ='')
+  names(lenData) <- c("mappinglength", "count")
+  lenData<- as.data.frame(lenData)
+  lines(lenData$mappinglength,lenData$count, type = 'b', col="blue")
+
+}
+
+# add a title and subtitle
+
+title("Mapped Length Distribution", "86 samples of line plot")
+
+
+nano cutadaptor.sh
+#!/bin/sh
+set -euo pipefail
+ls *fastq.gz |while read id
+do
+echo $id
+/sw/hgcc/Pkgs/Anaconda2/4.2.0/bin/cutadapt -a TGGAATTCTCGGGTGCCAAGGAACTCCAGTCAC -e 0.1 -O 5 -m 10 -o ./cutadapter/${id%%.*}_adaperrm.fastq.gz $id > ./cutadapter/${id%%.*}_adaperrm.log
+done     
+qsub -cwd -pe smp 24 cutadaptor.sh
+
+
+3/9/2018
+
+
+71897 71949 71950 71951 71952 71954
+
+
+nano makepdbstep2b3m.sh
+
+#!/bin/sh
+set -euo pipefail
+for file in 71897 71949 71950 71951 71952 71954;
+do
+GenPro_make_perprotdb2.pl -i $file -d db3 -r /mnt/22qFSS/data2/GenPro/hg19/refProt -o Json3;
+done
+
+qsub -cwd -pe smp 24 makepdbstep2b3m.sh
+
+
+3/13/2018
+nano makepdbstep2b4.sh
+
+#!/bin/sh
+set -euo pipefail
+for file in $(cat ./ids.MSBB.batch_4.txt);
+do
+GenPro_make_perprotdb2.pl -i $file -d db4 -r /mnt/22qFSS/data2/GenPro/hg19/refProt -o Json4;
+done
+
+qsub -cwd -pe smp 24 makepdbstep2b4.sh
+
+
+3/15/2018
+
+cd ~/App-randomizeSamples/bin
+randomizeSamples -f /home/maohuaxie/Emoryjob/batch2_4randomization.csv -r msex, cogdx -t cat, cat -i projid -b 6 -p 80 -o /home/maohuaxie/Emoryjob/test -a
+cd ~/Emoryjob
+nano test.csv 
+cat test.yml 
+cat test.R
+cat test.Rout 
+
+randomizeSamples -f /home/maohuaxie/Emoryjob/batch2_4randomization.csv -r msex,cogdx -t cat,cat -i projid -b 6 -p 80 -o /home/maohuaxie/Emoryjob/test1 -a
+randomizeSamples -f /home/maohuaxie/Emoryjob/batch2_4randomization.csv -r msex,cogdx -t cat,cat -i projid -b 6 -p 80 -o /home/maohuaxie/Emoryjob/RosMapset1_maohua -a
