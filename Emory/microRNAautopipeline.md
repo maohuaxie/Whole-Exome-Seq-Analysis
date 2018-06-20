@@ -1,3 +1,4 @@
+## Below is my autppipeline for miRNA annotation
 #!/bin/sh
 set -euo pipefail
 if [ ! -d /home/mxie/Projects/miRNA/test ]; 
@@ -35,8 +36,8 @@ cd /home/mxie/Projects/miRNA/test
 ls *fastq.gz |while read id
 do
 echo $id
-#/sw/hgcc/Pkgs/Anaconda2/4.2.0/bin/cutadapt -a AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC -o /home/mxie/Projects/miRNA/test/trimmed/${id%%.*}_miRNAtrimmed.fastq.gz $id > /home/mxie/Projects/miRNA/test/trimmed/${id%%.*}_adaprm.log
-/sw/hgcc/Pkgs/Anaconda2/4.2.0/bin/cutadapt -m 15 -a AGATCGGAAGAGCACACGTCT $id > /home/mxie/Projects/miRNA/test/trimmed/${id%%.*}_miRNAtrimmed.fastq.gz
+
+/sw/hgcc/Pkgs/Anaconda2/4.2.0/bin/cutadapt -m 15 -a AGATCGGAAGAGCACACGTCT -o /home/mxie/Projects/miRNA/test/trimmed/${id%%.*}_miRNAtrimmed.fastq.gz $id > /home/mxie/Projects/miRNA/test/trimmed/${id%%.*}_adaprm.log
 #java -Xmx2g -jar /sw/hgcc/Pkgs/Trimmomatic/0.36/trimmomatic-0.36.jar SE -phred33 $id  /home/mxie/Projects/miRNA/test/trimmed/${id%%.*}_miRNAtrimmed.fastq.gz ILLUMINACLIP:/home/mxie/Projects/miRNA/src/illumina_RGA_3p_adapter.fa:2:30:10;
 done     
 
@@ -83,4 +84,27 @@ do
 echo $id
 file="${id:0:8}"
 /sw/hgcc/Pkgs/samtools/1.5/bin/samtools view $id | gawk '{mlarr[length($10)]++}END{for (len = 1; len <=101; len++) printf("%d\t%d\n",len,mlarr[len])}' | sort -k 1n,1n  > /home/mxie/Projects/miRNA/test/QC_mappedlength/${file}_mapped_length_distribution_data.txt;
+done
+
+
+cd /home/mxie/Projects/miRNA/test/trimmed
+ls *_miRNAtrimmed.fastq.gz |while read id
+do
+echo $id
+echo $(zcat $id|wc -l)/4 | bc >> totalcounts.txt;
+done
+
+ls  *.fastq.gz| while read id
+do
+echo $id
+file="${id:0:8}"
+echo $file >> id.txt 
+done
+
+cd /home/mxie/Projects/miRNA/test/mapped
+
+ls *sorted.bam |while read id
+do
+echo $id
+/sw/hgcc/Pkgs/samtools/1.5/bin/samtools view -c $id >> mappedcounts.txt;
 done
